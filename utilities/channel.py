@@ -2,16 +2,13 @@ from os import path
 import pickle
 
 class Vtuber(object):
-    __vtb_id = str()
-    def __init__(self, ch_id):
-        self.__vtb_id = ch_id
-    @property
-    def vtb_id(self):
-        return self.__vtb_id
-    
-    @vtb_id.setter
-    def vtb_id(self, ch_id):
-        self.__vtb_id = ch_id
+    vtb_id = str()
+    channel_title = str()
+    thumbnail_url = dict()
+    def __init__(self, ch_id, ch_title, thumbnail_url):
+        self.vtb_id = ch_id
+        self.channel_title = ch_title
+        self.thumbnail_url = thumbnail_url
 
 class Data(object):
     FILE_PATH = path.join(path.dirname(__file__), 'Vtuber.data')
@@ -38,5 +35,11 @@ class Data(object):
         # update file
         with open(self.FILE_PATH, 'wb') as f:
             pickle.dump(self.Vtubers, f)
+    
+    def search(self, ch_id: str):
+        for vtb in self.Vtubers:
+            if vtb.vtb_id == ch_id:
+                return True
+        else: return False
 
 database = Data()
