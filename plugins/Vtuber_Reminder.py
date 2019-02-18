@@ -1,8 +1,13 @@
+import nonebot
 from nonebot import on_command, CommandSession, get_loaded_plugins
 from nonebot.permission import SUPERUSER, GROUP
-from utilities.youtube import YouTube
+from aiocqhttp.exceptions import Error as CQHttpError
+from utilities.youtube import YouTube, youtube
 from utilities.channel import database, Vtuber
-youtube = YouTube('', address='localhost', port=1080)
+
+schedule_checker = dict()
+first_run = True
+
 usage = True
 
 def check_usage():
@@ -24,25 +29,66 @@ async def speak(session: CommandSession):
 @on_command('stream', aliases=['直播'], permission=GROUP)
 async def stream(session: CommandSession):
     if not check_usage(): return
-    stream_status = await get_stream_status()
+    stream_status = await get_stream_status(True)
+    print(stream_status)
     await session.send(stream_status)
 
-async def get_stream_status() -> str:
+@nonebot.scheduler.scheduled_job('interval', minutes=1)
+async def _():
+    bot = nonebot.get_bot()
+    try:
+        stream_status = await get_stream_status(False)
+        if stream_status:
+            print(stream_status)
+            await bot.send_group_msg(
+                group_id=820670085,
+                message=stream_status)
+    except CQHttpError:
+        print("GROUP MSG ERROR")
+
+async def get_stream_status(mannual: bool) -> str:
+    word = ['开播辣!', '正在直播']
     feedback = str()
+
+    def msg(channel_title, stream_name, thumbnail_url):
+        url = str()
+        if 'high' in thumbnail_url:
+            url = thumbnail_url['high']['url']
+        elif 'medium' in thumbnail_url:
+            url = thumbnail_url['medium']['url']
+        else:
+            url = thumbnail_url['default']['url']
+        return f'{channel_title} {word[mannual]}: {stream_name}\n[CQ:image,file={url}]\n'
+
+    global first_run
+    global schedule_checker
     for vtb in database.info():
         #print(vtb.vtb_id)
         stream_status = await youtube.stream_check(vtb.vtb_id)
-        if stream_status[0] == True:
-            feedback += f'{stream_status[1]} 正在直播: {stream_status[2]}\n'
-    if feedback == '':
+        if not mannual:
+            if stream_status[0]:
+                if ((vtb.vtb_id in schedule_checker and not schedule_checker[vtb.vtb_id]) or vtb.vtb_id not in schedule_checker):
+                    feedback += msg(stream_status[1], stream_status[2], stream_status[3])
+                    schedule_checker[vtb.vtb_id] = True
+                else:
+                    pass
+            else:
+                schedule_checker[vtb.vtb_id] = False
+        else:
+            if stream_status[0]:
+                feedback += msg(stream_status[1], stream_status[2], stream_status[3])
+    if mannual and feedback == '':
         feedback = '在我的DD范围里面没有人在直播呢~\n'
-    return feedback[:-1]
+    if feedback:
+        return feedback[:-1]
+    else:
+        return feedback
 
 
 @on_command('ddlist', aliases = ['最新份的DD列表'], permission=GROUP)
 async def vtb_info(session: CommandSession):
-    feedback = str()
     if not check_usage(): return
+    feedback = str()
     for vtb in database.info():
         feedback += vtb.channel_title + '\n'
     if len(feedback): feedback = feedback[:-1]
@@ -50,6 +96,7 @@ async def vtb_info(session: CommandSession):
 
 @on_command('addchid', permission=SUPERUSER)
 async def addchid(session: CommandSession):
+    if not check_usage(): return
     ch_id = session.get('ch_id', prompt='你想D谁？倒是告诉我id啊').strip()
     if ch_id:
         add_result = await add_vtb(0, ch_id)
@@ -57,6 +104,7 @@ async def addchid(session: CommandSession):
 
 @on_command('addname', permission=SUPERUSER)
 async def addname(session: CommandSession):
+    if not check_usage(): return
     name = session.get('name', prompt='你想D谁？倒是告诉我名字啊').strip()
     if name:
         add_result = await add_vtb(1, name)

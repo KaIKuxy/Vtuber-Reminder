@@ -40,6 +40,6 @@ class Data(object):
         for vtb in self.Vtubers:
             if vtb.vtb_id == ch_id:
                 return True
-        else: return False
+        return False
 
 database = Data()

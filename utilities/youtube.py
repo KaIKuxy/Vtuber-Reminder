@@ -94,3 +94,5 @@ class YouTube(object):
 # tab of
 #   https://cloud.google.com/console
 # Please ensure that you have enabled the YouTube Data API for your project.
+
+youtube = YouTube('', address='localhost', port=1080)
