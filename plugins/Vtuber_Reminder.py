@@ -4,6 +4,7 @@ from nonebot.permission import SUPERUSER, GROUP
 from aiocqhttp.exceptions import Error as CQHttpError
 from utilities.youtube import YouTube, youtube
 from utilities.channel import database, Vtuber
+import httplib2
 
 schedule_checker = dict()
 first_run = True
@@ -33,8 +34,9 @@ async def stream(session: CommandSession):
     print(stream_status)
     await session.send(stream_status)
 
-@nonebot.scheduler.scheduled_job('interval', minutes=1)
+@nonebot.scheduler.scheduled_job('interval', minutes=3)
 async def _():
+    print("auto check")
     bot = nonebot.get_bot()
     try:
         stream_status = await get_stream_status(False)
@@ -50,14 +52,20 @@ async def get_stream_status(mannual: bool) -> str:
     word = ['开播辣!', '正在直播']
     feedback = str()
 
-    def msg(channel_title, stream_name, thumbnail_url):
+    async def msg(channel_title, stream_name, thumbnail_url, ch_id):
         url = str()
-        if 'high' in thumbnail_url:
+        if 'maxres' in thumbnail_url:
+            url = thumbnail_url['maxres']['url']
+        elif 'standard' in thumbnail_url:
+            url = thumbnail_url['standard']['url']
+        elif 'high' in thumbnail_url:
             url = thumbnail_url['high']['url']
         elif 'medium' in thumbnail_url:
             url = thumbnail_url['medium']['url']
         else:
             url = thumbnail_url['default']['url']
+        #file_path = await youtube.pic_download(url, ch_id)
+        #return f'{channel_title} {word[mannual]}: {stream_name}\n[CQ:image,file=file:///{file_path}]\n'
         return f'{channel_title} {word[mannual]}: {stream_name}\n[CQ:image,file={url}]\n'
 
     global first_run
@@ -68,7 +76,7 @@ async def get_stream_status(mannual: bool) -> str:
         if not mannual:
             if stream_status[0]:
                 if ((vtb.vtb_id in schedule_checker and not schedule_checker[vtb.vtb_id]) or vtb.vtb_id not in schedule_checker):
-                    feedback += msg(stream_status[1], stream_status[2], stream_status[3])
+                    feedback += await msg(stream_status[1], stream_status[2], stream_status[3], vtb.vtb_id)
                     schedule_checker[vtb.vtb_id] = True
                 else:
                     pass
@@ -76,7 +84,7 @@ async def get_stream_status(mannual: bool) -> str:
                 schedule_checker[vtb.vtb_id] = False
         else:
             if stream_status[0]:
-                feedback += msg(stream_status[1], stream_status[2], stream_status[3])
+                feedback += await msg(stream_status[1], stream_status[2], stream_status[3], vtb.vtb_id)
     if mannual and feedback == '':
         feedback = '在我的DD范围里面没有人在直播呢~\n'
     if feedback:
