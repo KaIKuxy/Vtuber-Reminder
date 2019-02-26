@@ -150,4 +150,4 @@ class YouTube(object):
 #   https://cloud.google.com/console
 # Please ensure that you have enabled the YouTube Data API for your project.
 
-youtube = YouTube('AIzaSyAe9_wDbm3dXxq36aMpEA6IYhYAPow87lo', address='localhost', port=1080)
+youtube = YouTube('', address='localhost', port=1080)
