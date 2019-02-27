@@ -7,7 +7,7 @@ from utilities.channel import database, Vtuber
 import httplib2
 
 schedule_checker = dict()
-first_run = True
+LAZY_CHECK = 4
 
 usage = True
 
@@ -34,7 +34,7 @@ async def stream(session: CommandSession):
     print(stream_status)
     await session.send(stream_status)
 
-@nonebot.scheduler.scheduled_job('interval', minutes=3)
+@nonebot.scheduler.scheduled_job('interval', minutes=5)
 async def _():
     print("auto check")
     bot = nonebot.get_bot()
@@ -52,7 +52,7 @@ async def get_stream_status(mannual: bool) -> str:
     word = ['开播辣!', '正在直播']
     feedback = str()
 
-    async def msg(channel_title, stream_name, thumbnail_url, ch_id):
+    async def msg(channel_title, stream_name, thumbnail_url, ch_id, state = mannual):
         url = str()
         if 'maxres' in thumbnail_url:
             url = thumbnail_url['maxres']['url']
@@ -66,25 +66,37 @@ async def get_stream_status(mannual: bool) -> str:
             url = thumbnail_url['default']['url']
         #file_path = await youtube.pic_download(url, ch_id)
         #return f'{channel_title} {word[mannual]}: {stream_name}\n[CQ:image,file=file:///{file_path}]\n'
-        return f'{channel_title} {word[mannual]}: {stream_name}\n[CQ:image,file={url}]\n'
+        return f'{channel_title} {word[state]}: {stream_name}\n[CQ:image,file={url}]\n'
 
-    global first_run
     global schedule_checker
     for vtb in database.info():
         #print(vtb.vtb_id)
-        stream_status = await youtube.stream_check(vtb.vtb_id)
-        if not mannual:
+        if not mannual: # auto check
+            if vtb.vtb_id in schedule_checker and schedule_checker[vtb.vtb_id][0] and schedule_checker[vtb.vtb_id][2] < LAZY_CHECK:
+                schedule_checker[vtb.vtb_id][2] += 1
+                continue
+            stream_status = await youtube.stream_check(vtb.vtb_id)
             if stream_status[0]:
-                if ((vtb.vtb_id in schedule_checker and not schedule_checker[vtb.vtb_id]) or vtb.vtb_id not in schedule_checker):
-                    feedback += await msg(stream_status[1], stream_status[2], stream_status[3], vtb.vtb_id)
-                    schedule_checker[vtb.vtb_id] = True
+                if ((vtb.vtb_id in schedule_checker and not schedule_checker[vtb.vtb_id][0]) or vtb.vtb_id not in schedule_checker):
+                    status = await msg(stream_status[1], stream_status[2], stream_status[3], vtb.vtb_id)
+                    feedback += status
+                    schedule_checker[vtb.vtb_id] = [True, await msg(stream_status[1], stream_status[2], stream_status[3], vtb.vtb_id, state = True), 0]
                 else:
-                    pass
+                    schedule_checker[vtb.vtb_id][2] = 0
             else:
-                schedule_checker[vtb.vtb_id] = False
-        else:
-            if stream_status[0]:
-                feedback += await msg(stream_status[1], stream_status[2], stream_status[3], vtb.vtb_id)
+                schedule_checker[vtb.vtb_id] = [False]
+        else: # mannual check
+            if vtb.vtb_id in schedule_checker:
+                if schedule_checker[vtb.vtb_id][0] == True:
+                    feedback += schedule_checker[vtb.vtb_id][1]
+            else:
+                stream_status = await youtube.stream_check(vtb.vtb_id)
+                if stream_status[0]:
+                    status = await msg(stream_status[1], stream_status[2], stream_status[3], vtb.vtb_id)
+                    feedback += status
+                    schedule_checker[vtb.vtb_id] = [True, await msg(stream_status[1], stream_status[2], stream_status[3], vtb.vtb_id, state = True), 0]
+                else:
+                    schedule_checker[vtb.vtb_id] = [False]
     if mannual and feedback == '':
         feedback = '在我的DD范围里面没有人在直播呢~\n'
     if feedback:
@@ -98,7 +110,8 @@ async def vtb_info(session: CommandSession):
     if not check_usage(): return
     feedback = str()
     for vtb in database.info():
-        feedback += vtb.channel_title + '\n'
+        url = vtb.thumbnail_url['default']['url']
+        feedback += f'{vtb.channel_title}[CQ:image,file={url}]\n'
     if len(feedback): feedback = feedback[:-1]
     await session.send(feedback)
 
