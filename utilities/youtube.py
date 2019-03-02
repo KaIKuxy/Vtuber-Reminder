@@ -2,6 +2,7 @@ import argparse
 import httplib2
 import re
 from os import path
+from datetime import datetime
 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -22,8 +23,7 @@ class YouTube(object):
             http=self.h
         )
 
-    async def stream_check(self, ch_id):
-        print("checking " + ch_id)
+    async def stream_check(self, ch_id: str):
         url = f'https://www.youtube.com/channel/{ch_id}/live'
         h = httplib2.Http(proxy_info = httplib2.ProxyInfo(httplib2.socks.PROXY_TYPE_SOCKS5, self.address, self.port))
         r, c = h.request(url)
@@ -56,7 +56,7 @@ class YouTube(object):
         else: # offline now
             return [False]
 
-    async def stream_check_search(self, ch_id):
+    async def stream_check_search(self, ch_id: str):
         # Call the search.list method to retrieve results matching the specified
         # query term.
         while True:
@@ -83,7 +83,7 @@ class YouTube(object):
     async def channel_search(self, Vtuber_Name: str):
         # Search ytb channel by name
         # Return a list
-        #       Cases of success: [True, Channel_Title(str), Channel_Id(str), thumbnails_url(dict)]
+        #       Cases of success: [True, Channel_Id(str), Channel_Title(str), thumbnails_url(dict)]
         while True:
             try:
                 search_response = self.youtube.search().list(
@@ -121,7 +121,7 @@ class YouTube(object):
     async def channel_info(self, ch_id: str):
         # Get channel information
         # Return a list
-        #       Cases of success: [True, Channel_Title(str), Channel_Id(str), thumbnails_url(dict)]
+        #       Cases of success: [True, Channel_Id(str), Channel_Title(str), thumbnails_url(dict)]
         while True:
             try:
                 search_response = self.youtube.channels().list(
@@ -138,12 +138,49 @@ class YouTube(object):
             item = res[0]['snippet']
             return [True, ch_id, item['title'], item['thumbnails']]
     
-    async def pic_download(self, url, ch_id):
+    async def pic_download(self, url: str, ch_id: str):
         file_path = path.join(path.dirname(__file__), 'cache', ch_id+'.jpg')
         _, img = self.h.request(url)
         with open(file_path, 'wb') as f:
             f.write(img)
         return file_path
+
+    async def uploaded_video_list(self, ch_id: str):
+        while True:
+            try:
+                search_response = self.youtube.channels().list(
+                        part='contentDetails',
+                        id=ch_id
+                    ).execute()
+                break
+            except:
+                pass
+        res = search_response.get('items', [])
+        playlist = res[0]['contentDetails']['relatedPlaylists']['uploads']
+        return playlist
+    
+    async def newest_video(self, playlist, oldLatestTime):
+        # get new videos published after oldLatestTime
+        while True:
+            try:
+                search_response = self.youtube.playlistItems().list(
+                        part='snippet',
+                        playlistId=playlist,
+                        maxResults=1 if oldLatestTime == datetime.min else 5
+                    ).execute()
+                break
+            except:
+                pass
+        res = search_response.get('items', [])
+        newLatestTime = oldLatestTime
+        video_list = []
+        for video in res:
+            Time = datetime.strptime(video['snippet']['publishedAt'],'%Y-%m-%dT%H:%M:%S.%fZ')
+            if Time > oldLatestTime:
+                print("new video")
+                newLatestTime = max(newLatestTime, Time)
+                video_list.append(video['snippet'])
+        return [video_list, newLatestTime]
 
 # Set DEVELOPER_KEY to the API key value from the APIs & auth > Registered apps
 # tab of

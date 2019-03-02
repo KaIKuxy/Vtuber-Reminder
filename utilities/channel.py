@@ -1,14 +1,14 @@
 from os import path
 import pickle
+from datetime import datetime
 
 class Vtuber(object):
-    vtb_id = str()
-    channel_title = str()
-    thumbnail_url = dict()
-    def __init__(self, ch_id, ch_title, thumbnail_url):
+    def __init__(self, ch_id: str, ch_title: str, thumbnail_url: dict(), video_list: str()):
         self.vtb_id = ch_id
         self.channel_title = ch_title
         self.thumbnail_url = thumbnail_url
+        self.video_list_id = video_list
+        self.latest_time = datetime.min
 
 class Data(object):
     FILE_PATH = path.join(path.dirname(__file__), 'Vtuber.data')

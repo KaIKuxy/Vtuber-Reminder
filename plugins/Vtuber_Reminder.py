@@ -34,42 +34,82 @@ async def stream(session: CommandSession):
     print(stream_status)
     await session.send(stream_status)
 
+@nonebot.scheduler.scheduled_job('interval', minutes=2)
+async def _():
+    # check new uploaded video automatically
+    print("auto video check")
+    bot = nonebot.get_bot()
+    video_status = str()
+    try:
+        for vtb in database.info():
+            video_status += await new_video_msg(vtb)
+        if video_status:
+            video_status = "新的视频来乐!\n" + video_status
+            # print(video_status)
+            database.store()
+            await bot.send_group_msg(
+                group_id=820670085,
+                message=video_status)
+    except CQHttpError:
+        print("GROUP MSG ERROR")
+
+async def new_video_msg(vtb):
+    print("checking " + vtb.channel_title + "'s video")
+    res = await youtube.newest_video(vtb.video_list_id, vtb.latest_time)
+    if len(res[0]) > 0:
+        vtb.latest_time = res[1]
+        url = thumbnail_msg(vtb.thumbnail_url, 'default')
+        msg = f'{vtb.channel_title}{url}:\n'
+        for video in res[0]:
+            msg += video['title'] + thumbnail_msg(video['thumbnails']) + '\n'
+        return msg
+    else:
+        return ""
+
 @nonebot.scheduler.scheduled_job('interval', minutes=5)
 async def _():
-    print("auto check")
+    # check ongoing live automatically
+    print("auto live check")
     bot = nonebot.get_bot()
     try:
         stream_status = await get_stream_status(False)
         if stream_status:
-            print(stream_status)
+            # print(stream_status)
             await bot.send_group_msg(
                 group_id=820670085,
                 message=stream_status)
     except CQHttpError:
         print("GROUP MSG ERROR")
 
+def thumbnail_msg(thumbnail_url: dict(), size=None):
+    url = str()
+    if size:
+        url = thumbnail_url[size]['url']
+        pass
+    elif 'maxres' in thumbnail_url:
+        url = thumbnail_url['maxres']['url']
+    elif 'standard' in thumbnail_url:
+        url = thumbnail_url['standard']['url']
+    elif 'high' in thumbnail_url:
+        url = thumbnail_url['high']['url']
+    elif 'medium' in thumbnail_url:
+        url = thumbnail_url['medium']['url']
+    else:
+        url = thumbnail_url['default']['url']
+    return f'[CQ:image,file={url}]'
+
 async def get_stream_status(mannual: bool) -> str:
     word = ['开播辣!', '正在直播']
     feedback = str()
 
     async def msg(channel_title, stream_name, thumbnail_url, ch_id, state = mannual):
-        url = str()
-        if 'maxres' in thumbnail_url:
-            url = thumbnail_url['maxres']['url']
-        elif 'standard' in thumbnail_url:
-            url = thumbnail_url['standard']['url']
-        elif 'high' in thumbnail_url:
-            url = thumbnail_url['high']['url']
-        elif 'medium' in thumbnail_url:
-            url = thumbnail_url['medium']['url']
-        else:
-            url = thumbnail_url['default']['url']
         #file_path = await youtube.pic_download(url, ch_id)
         #return f'{channel_title} {word[mannual]}: {stream_name}\n[CQ:image,file=file:///{file_path}]\n'
-        return f'{channel_title} {word[state]}: {stream_name}\n[CQ:image,file={url}]\n'
+        return f'{channel_title} {word[state]}: {stream_name}\n{thumbnail_msg(thumbnail_url)}\n'
 
     global schedule_checker
     for vtb in database.info():
+        print("checking " + vtb.channel_title + "'s live")
         #print(vtb.vtb_id)
         if not mannual: # auto check
             if vtb.vtb_id in schedule_checker and schedule_checker[vtb.vtb_id][0] and schedule_checker[vtb.vtb_id][2] < LAZY_CHECK:
@@ -110,9 +150,10 @@ async def vtb_info(session: CommandSession):
     if not check_usage(): return
     feedback = str()
     for vtb in database.info():
-        url = vtb.thumbnail_url['default']['url']
-        feedback += f'{vtb.channel_title}[CQ:image,file={url}]\n'
+        url = thumbnail_msg(vtb.thumbnail_url, size='default')
+        feedback += f'{vtb.channel_title}{url}\n'
     if len(feedback): feedback = feedback[:-1]
+    else: feedback = '我谁都没d'
     await session.send(feedback)
 
 @on_command('addchid', permission=SUPERUSER)
@@ -142,16 +183,18 @@ async def add_vtb(code: int, key: str) -> str:
         search_res = await youtube.channel_search(key)
     else:
         search_res = [False]
-    print(search_res)
+    # print(search_res)
     if not search_res[0]:
         feedback = '我没有找到有你想看的Vtuber呢~'
     else:
         if database.search(search_res[1]):
             feedback = '你想看的Vtuber已经被我DD辣！'
         else:
-            vtb = Vtuber(search_res[1], search_res[2], search_res[3])
+            video_list = await youtube.uploaded_video_list(search_res[1])
+            vtb = Vtuber(search_res[1], search_res[2], search_res[3], video_list)
             database.add_Vtuber(vtb)
-            feedback = '你加了ta:\n' + search_res[2]
+            url = thumbnail_msg(vtb.thumbnail_url, size='default')
+            feedback = '你加了ta:\n' + f'{vtb.channel_title}{url}\n'
     return feedback
 
 @addchid.args_parser
