@@ -1,4 +1,5 @@
 import nonebot
+import asyncio
 from nonebot import on_command, CommandSession, get_loaded_plugins
 from nonebot.permission import SUPERUSER, GROUP
 from aiocqhttp.exceptions import Error as CQHttpError
@@ -7,7 +8,7 @@ from utilities.channel import database, Vtuber
 import httplib2
 
 schedule_checker = dict()
-LAZY_CHECK = 4
+LAZY_CHECK = 2
 
 usage = True
 
@@ -34,39 +35,58 @@ async def stream(session: CommandSession):
     print(stream_status)
     await session.send(stream_status)
 
-@nonebot.scheduler.scheduled_job('interval', minutes=2)
+@nonebot.scheduler.scheduled_job('interval', hours=1)
 async def _():
+    async def new_video_msg(vtb):
+        nonlocal video_status, output, cnt
+        if cnt == 10:
+            cnt = 0
+            if video_status:
+                output.append(video_status)
+            video_status = ""
+        print("checking " + vtb.channel_title + "'s video")
+        res = await youtube.newest_video(vtb.video_list_id, vtb.latest_time)
+        if len(res[0]) > 0:
+            vtb.latest_time = res[1]
+            url = thumbnail_msg(vtb.thumbnail_url, 'default')
+            msg = f'{vtb.channel_title}{url}:\n'
+            for video in res[0]:
+                msg += video['title'] + thumbnail_msg(video['thumbnails']) + '\n'
+            video_status += msg
+        else:
+            pass
+        cnt += 1
     # check new uploaded video automatically
     print("auto video check")
     bot = nonebot.get_bot()
     video_status = str()
+    output = []
+    cnt = 0
+    tasks = [new_video_msg(vtb) for vtb in database.info()]
+    _, _ = await asyncio.wait(tasks)
     try:
-        for vtb in database.info():
-            video_status += await new_video_msg(vtb)
-        if video_status:
-            video_status = "新的视频来乐!\n" + video_status
-            # print(video_status)
-            database.store()
+        #for vtb in database.info():
+            #video_status += await new_video_msg(vtb)
+        
+        if len(output):
             await bot.send_group_msg(
                 group_id=820670085,
-                message=video_status)
+                message="新的视频来乐!")
+            for status in output:
+                await bot.send_group_msg(
+                    group_id=820670085,
+                    message=status)
+            # print(video_status)
+            database.store()
+            #await bot.send_group_msg(
+                #group_id=820670085,
+                #message=video_status)
     except CQHttpError:
         print("GROUP MSG ERROR")
 
-async def new_video_msg(vtb):
-    print("checking " + vtb.channel_title + "'s video")
-    res = await youtube.newest_video(vtb.video_list_id, vtb.latest_time)
-    if len(res[0]) > 0:
-        vtb.latest_time = res[1]
-        url = thumbnail_msg(vtb.thumbnail_url, 'default')
-        msg = f'{vtb.channel_title}{url}:\n'
-        for video in res[0]:
-            msg += video['title'] + thumbnail_msg(video['thumbnails']) + '\n'
-        return msg
-    else:
-        return ""
 
-@nonebot.scheduler.scheduled_job('interval', minutes=5)
+
+@nonebot.scheduler.scheduled_job('interval', minutes=10)
 async def _():
     # check ongoing live automatically
     print("auto live check")
@@ -106,15 +126,15 @@ async def get_stream_status(mannual: bool) -> str:
         #file_path = await youtube.pic_download(url, ch_id)
         #return f'{channel_title} {word[mannual]}: {stream_name}\n[CQ:image,file=file:///{file_path}]\n'
         return f'{channel_title} {word[state]}: {stream_name}\n{thumbnail_msg(thumbnail_url)}\n'
-
-    global schedule_checker
-    for vtb in database.info():
+        
+    async def check(vtb):
+        nonlocal feedback
         print("checking " + vtb.channel_title + "'s live")
         #print(vtb.vtb_id)
         if not mannual: # auto check
             if vtb.vtb_id in schedule_checker and schedule_checker[vtb.vtb_id][0] and schedule_checker[vtb.vtb_id][2] < LAZY_CHECK:
                 schedule_checker[vtb.vtb_id][2] += 1
-                continue
+                return 
             stream_status = await youtube.stream_check(vtb.vtb_id)
             if stream_status[0]:
                 if ((vtb.vtb_id in schedule_checker and not schedule_checker[vtb.vtb_id][0]) or vtb.vtb_id not in schedule_checker):
@@ -137,6 +157,12 @@ async def get_stream_status(mannual: bool) -> str:
                     schedule_checker[vtb.vtb_id] = [True, await msg(stream_status[1], stream_status[2], stream_status[3], vtb.vtb_id, state = True), 0]
                 else:
                     schedule_checker[vtb.vtb_id] = [False]
+
+    global schedule_checker
+    tasks = [check(vtb) for vtb in database.info()]
+    #for vtb in database.info():
+        #await check(vtb)
+    _, _ = await asyncio.wait(tasks)
     if mannual and feedback == '':
         feedback = '在我的DD范围里面没有人在直播呢~\n'
     if feedback:
@@ -148,13 +174,22 @@ async def get_stream_status(mannual: bool) -> str:
 @on_command('ddlist', aliases = ['最新份的DD列表'], permission=GROUP)
 async def vtb_info(session: CommandSession):
     if not check_usage(): return
-    feedback = str()
-    for vtb in database.info():
-        url = thumbnail_msg(vtb.thumbnail_url, size='default')
-        feedback += f'{vtb.channel_title}{url}\n'
-    if len(feedback): feedback = feedback[:-1]
-    else: feedback = '我谁都没d'
-    await session.send(feedback)
+    if len(database.info()) == 0:
+        await session.send('我谁都没d')
+
+    async def send_list(vtblist):
+        feedback = str()
+        for vtb in vtblist:
+            url = thumbnail_msg(vtb.thumbnail_url, size='default')
+            feedback += f'{vtb.channel_title}{url}\n'
+        if len(feedback): feedback = feedback[:-1]
+        await session.send(feedback)
+    
+    id = 0
+    while id < len(database.info()):
+        await send_list(database.info()[id:min(id + 10, len(database.info()))])
+        id += 10
+    
 
 @on_command('addchid', permission=SUPERUSER)
 async def addchid(session: CommandSession):

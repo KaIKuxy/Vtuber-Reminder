@@ -1,5 +1,6 @@
 import argparse
 import httplib2
+import aiohttp
 import re
 from os import path
 from datetime import datetime
@@ -25,8 +26,17 @@ class YouTube(object):
 
     async def stream_check(self, ch_id: str):
         url = f'https://www.youtube.com/channel/{ch_id}/live'
-        h = httplib2.Http(proxy_info = httplib2.ProxyInfo(httplib2.socks.PROXY_TYPE_SOCKS5, self.address, self.port))
-        r, c = h.request(url)
+        # h = httplib2.Http(proxy_info = httplib2.ProxyInfo(httplib2.socks.PROXY_TYPE_SOCKS5, self.address, self.port))
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, proxy='http://localhost:1080') as resp:
+                c = await resp.text()
+                #print("get")
+        '''while True:
+            try:
+                r, c = h.request(url)
+                break
+            except:
+                pass'''
         c = str(c)
         if "offline" not in c: # live now
 
@@ -166,7 +176,7 @@ class YouTube(object):
                 search_response = self.youtube.playlistItems().list(
                         part='snippet',
                         playlistId=playlist,
-                        maxResults=1 if oldLatestTime == datetime.min else 5
+                        maxResults=2 if oldLatestTime == datetime.min else 5
                     ).execute()
                 break
             except:
