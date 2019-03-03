@@ -28,7 +28,7 @@ async def speak(session: CommandSession):
     usage = True
     await session.send('口球好爽')
 
-@on_command('stream', aliases=['直播'], permission=GROUP)
+@on_command('stream', aliases=['直播'], permission=GROUP, only_to_me=False)
 async def stream(session: CommandSession):
     if not check_usage(): return
     stream_status = await get_stream_status(True)
@@ -70,11 +70,11 @@ async def _():
         
         if len(output):
             await bot.send_group_msg(
-                group_id=820670085,
+                group_id=208751130,
                 message="新的视频来乐!")
             for status in output:
                 await bot.send_group_msg(
-                    group_id=820670085,
+                    group_id=208751130,
                     message=status)
             # print(video_status)
             database.store()
@@ -96,7 +96,7 @@ async def _():
         if stream_status:
             # print(stream_status)
             await bot.send_group_msg(
-                group_id=820670085,
+                group_id=208751130,
                 message=stream_status)
     except CQHttpError:
         print("GROUP MSG ERROR")
@@ -266,7 +266,6 @@ async def _(session: CommandSession):
     text = r"""
     使用YTB的频道添加Vtuber频道
     addchid [频道id]
-    ↑施工中↑
 
     康康现在有谁在播
     stream/直播
