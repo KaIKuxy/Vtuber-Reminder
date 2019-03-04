@@ -8,7 +8,7 @@ from utilities.channel import database, Vtuber
 import httplib2
 
 schedule_checker = dict()
-LAZY_CHECK = 2
+LAZY_CHECK = 3
 
 usage = True
 
@@ -37,6 +37,7 @@ async def stream(session: CommandSession):
 
 @nonebot.scheduler.scheduled_job('interval', hours=1)
 async def _():
+    return
     async def new_video_msg(vtb):
         nonlocal video_status, output, cnt
         if cnt == 10:
@@ -51,7 +52,7 @@ async def _():
             url = thumbnail_msg(vtb.thumbnail_url, 'default')
             msg = f'{vtb.channel_title}{url}:\n'
             for video in res[0]:
-                msg += video['title'] + thumbnail_msg(video['thumbnails']) + '\n'
+                msg += video['title'] + '\n' + thumbnail_msg(video['thumbnails']) + '\n'
             video_status += msg
         else:
             pass
@@ -86,7 +87,7 @@ async def _():
 
 
 
-@nonebot.scheduler.scheduled_job('interval', minutes=10)
+@nonebot.scheduler.scheduled_job('interval', minutes=5)
 async def _():
     # check ongoing live automatically
     print("auto live check")
@@ -132,7 +133,7 @@ async def get_stream_status(mannual: bool) -> str:
         print("checking " + vtb.channel_title + "'s live")
         #print(vtb.vtb_id)
         if not mannual: # auto check
-            if vtb.vtb_id in schedule_checker and schedule_checker[vtb.vtb_id][0] and schedule_checker[vtb.vtb_id][2] < LAZY_CHECK:
+            if vtb.vtb_id in schedule_checker and schedule_checker[vtb.vtb_id][0] and schedule_checker[vtb.vtb_id][2] < LAZY_CHECK: # Lazy check ongoing streaming
                 schedule_checker[vtb.vtb_id][2] += 1
                 return 
             stream_status = await youtube.stream_check(vtb.vtb_id)
@@ -146,10 +147,7 @@ async def get_stream_status(mannual: bool) -> str:
             else:
                 schedule_checker[vtb.vtb_id] = [False]
         else: # mannual check
-            if vtb.vtb_id in schedule_checker:
-                if schedule_checker[vtb.vtb_id][0] == True:
-                    feedback += schedule_checker[vtb.vtb_id][1]
-            else:
+            if not(vtb.vtb_id in schedule_checker and not schedule_checker[vtb.vtb_id][0]):
                 stream_status = await youtube.stream_check(vtb.vtb_id)
                 if stream_status[0]:
                     status = await msg(stream_status[1], stream_status[2], stream_status[3], vtb.vtb_id)
@@ -157,6 +155,18 @@ async def get_stream_status(mannual: bool) -> str:
                     schedule_checker[vtb.vtb_id] = [True, await msg(stream_status[1], stream_status[2], stream_status[3], vtb.vtb_id, state = True), 0]
                 else:
                     schedule_checker[vtb.vtb_id] = [False]
+            
+            #if vtb.vtb_id in schedule_checker:
+                #if schedule_checker[vtb.vtb_id][0] == True:
+                    #feedback += schedule_checker[vtb.vtb_id][1]
+            #else:
+                #stream_status = await youtube.stream_check(vtb.vtb_id)
+                #if stream_status[0]:
+                    #status = await msg(stream_status[1], stream_status[2], stream_status[3], vtb.vtb_id)
+                    #feedback += status
+                    #schedule_checker[vtb.vtb_id] = [True, await msg(stream_status[1], stream_status[2], stream_status[3], vtb.vtb_id, state = True), 0]
+                #else:
+                    #schedule_checker[vtb.vtb_id] = [False]
 
     global schedule_checker
     tasks = [check(vtb) for vtb in database.info()]
