@@ -1,14 +1,14 @@
 import nonebot
 import asyncio
 from nonebot import on_command, CommandSession, get_loaded_plugins
-from nonebot.permission import SUPERUSER, GROUP
+from nonebot.permission import SUPERUSER, GROUP, EVERYBODY, PRIVATE_GROUP
 from aiocqhttp.exceptions import Error as CQHttpError
 from utilities.youtube import YouTube, youtube
 from utilities.channel import database, Vtuber
 import httplib2
 
 schedule_checker = dict()
-LAZY_CHECK = 3
+LAZY_CHECK = 2
 
 usage = True
 
@@ -28,7 +28,7 @@ async def speak(session: CommandSession):
     usage = True
     await session.send('口球好爽')
 
-@on_command('stream', aliases=['直播'], permission=GROUP, only_to_me=False)
+@on_command('stream', aliases=['直播'], permission=GROUP | PRIVATE_GROUP, only_to_me=False)
 async def stream(session: CommandSession):
     if not check_usage(): return
     stream_status = await get_stream_status(True)
@@ -87,7 +87,7 @@ async def _():
 
 
 
-@nonebot.scheduler.scheduled_job('interval', minutes=5)
+@nonebot.scheduler.scheduled_job('interval', minutes=10)
 async def _():
     # check ongoing live automatically
     print("auto live check")
@@ -136,7 +136,7 @@ async def get_stream_status(mannual: bool) -> str:
             if vtb.vtb_id in schedule_checker and schedule_checker[vtb.vtb_id][0] and schedule_checker[vtb.vtb_id][2] < LAZY_CHECK: # Lazy check ongoing streaming
                 schedule_checker[vtb.vtb_id][2] += 1
                 return 
-            stream_status = await youtube.stream_check(vtb.vtb_id)
+            stream_status = await youtube.stream_check(vtb.vtb_id, vtb.channel_title)
             if stream_status[0]:
                 if ((vtb.vtb_id in schedule_checker and not schedule_checker[vtb.vtb_id][0]) or vtb.vtb_id not in schedule_checker):
                     status = await msg(stream_status[1], stream_status[2], stream_status[3], vtb.vtb_id)
@@ -148,7 +148,7 @@ async def get_stream_status(mannual: bool) -> str:
                 schedule_checker[vtb.vtb_id] = [False]
         else: # mannual check
             if not(vtb.vtb_id in schedule_checker and not schedule_checker[vtb.vtb_id][0]):
-                stream_status = await youtube.stream_check(vtb.vtb_id)
+                stream_status = await youtube.stream_check(vtb.vtb_id, vtb.channel_title)
                 if stream_status[0]:
                     status = await msg(stream_status[1], stream_status[2], stream_status[3], vtb.vtb_id)
                     feedback += status
@@ -181,7 +181,7 @@ async def get_stream_status(mannual: bool) -> str:
         return feedback
 
 
-@on_command('ddlist', aliases = ['最新份的DD列表'], permission=GROUP)
+@on_command('ddlist', aliases = ['最新份的DD列表'], permission=GROUP | PRIVATE_GROUP)
 async def vtb_info(session: CommandSession):
     if not check_usage(): return
     if len(database.info()) == 0:
@@ -201,7 +201,7 @@ async def vtb_info(session: CommandSession):
         id += 10
     
 
-@on_command('addchid', permission=SUPERUSER)
+@on_command('addchid', permission=GROUP | PRIVATE_GROUP)
 async def addchid(session: CommandSession):
     if not check_usage(): return
     ch_id = session.get('ch_id', prompt='你想D谁？倒是告诉我id啊').strip()
@@ -270,7 +270,7 @@ async def _(session: CommandSession):
         return 
     session.state[session.current_key] = stripped_arg
 
-@on_command('help', aliases=['帮助', '救救我啊'], permission=GROUP)
+@on_command('help', aliases=['帮助', '救救我啊'], permission=GROUP | PRIVATE_GROUP)
 async def _(session: CommandSession):
     if not check_usage(): return
     text = r"""

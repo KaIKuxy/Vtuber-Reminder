@@ -24,7 +24,7 @@ class YouTube(object):
             http=self.h
         )
 
-    async def stream_check(self, ch_id: str):
+    async def stream_check(self, ch_id: str, channel_title: str):
         url = f'https://www.youtube.com/channel/{ch_id}/live'
         # h = httplib2.Http(proxy_info = httplib2.ProxyInfo(httplib2.socks.PROXY_TYPE_SOCKS5, self.address, self.port))
         async with aiohttp.ClientSession() as session:
@@ -45,10 +45,13 @@ class YouTube(object):
             while c[ed] != '"':
                 ed += 1
             video_id = c[st:ed]
-            #print(video_id)
-            
+            if video_id[-1] == '=':
+                return [False]
+            print(f"{channel_title} is online")
             while True:
                 try:
+                    #print(video_id)
+                    #print(ch_id)
                     search_response = self.youtube.videos().list(
                         part='snippet',
                         id=video_id
