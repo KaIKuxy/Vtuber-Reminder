@@ -3,7 +3,7 @@ import httplib2
 import aiohttp
 import re
 from os import path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -172,19 +172,23 @@ class YouTube(object):
         playlist = res[0]['contentDetails']['relatedPlaylists']['uploads']
         return playlist
     
-    async def newest_video(self, playlist, oldLatestTime):
-        # get new videos published after oldLatestTime
+    async def video_list(self, playlist, maxresult=5):
         while True:
             try:
                 search_response = self.youtube.playlistItems().list(
                         part='snippet',
                         playlistId=playlist,
-                        maxResults=2 if oldLatestTime == datetime.min else 5
+                        maxResults=maxresult
                     ).execute()
                 break
             except:
                 pass
         res = search_response.get('items', [])
+        return res
+    
+    async def newest_video(self, playlist, oldLatestTime):
+        # get new videos published after oldLatestTime
+        res = await self.video_list(playlist, maxresult=2 if oldLatestTime == datetime.min else 5)
         newLatestTime = oldLatestTime
         video_list = []
         for video in res:
@@ -194,6 +198,15 @@ class YouTube(object):
                 newLatestTime = max(newLatestTime, Time)
                 video_list.append(video['snippet'])
         return [video_list, newLatestTime]
+
+    async def videos_of_day(self, playlist, today=True):
+        res = await self.video_list(playlist)
+        video_list = []
+        for video in res:
+            Time = datetime.strptime(video['snippet']['publishedAt'],'%Y-%m-%dT%H:%M:%S.%fZ')
+            if (datetime.utcnow()+timedelta(hours=9)-timedelta(days=not today)).date() == (Time + timedelta(hours=9)).date():
+                video_list.append(video['snippet'])
+        return video_list
 
 # Set DEVELOPER_KEY to the API key value from the APIs & auth > Registered apps
 # tab of

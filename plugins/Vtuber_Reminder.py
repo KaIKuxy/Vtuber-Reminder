@@ -5,10 +5,11 @@ from nonebot.permission import SUPERUSER, GROUP, EVERYBODY, PRIVATE_GROUP
 from aiocqhttp.exceptions import Error as CQHttpError
 from utilities.youtube import YouTube, youtube
 from utilities.channel import database, Vtuber
+from utilities.image_create import uploaded_video_img
 import httplib2
 
 schedule_checker = dict()
-LAZY_CHECK = 2
+LAZY_CHECK = 4
 
 usage = True
 
@@ -32,8 +33,40 @@ async def speak(session: CommandSession):
 async def stream(session: CommandSession):
     if not check_usage(): return
     stream_status = await get_stream_status(True)
-    print(stream_status)
+    #print(stream_status)
     await session.send(stream_status)
+
+@on_command('today', aliases=['今天'], permission=SUPERUSER)
+async def videos_of_today(session: CommandSession):
+    await videos(session)
+
+@on_command('yesterday', aliases=['昨天'], permission=PRIVATE_GROUP)
+async def videos_of_yesterday(session: CommandSession):
+    await videos(session, today=False)
+
+async def videos(session: CommandSession, today=True):
+    async def new_video(vtb):
+        videos = await youtube.videos_of_day(vtb.video_list_id)
+        if videos:
+            print(f"{vtb.channel_title} has new video")
+            nonlocal output
+            vtb_videos = [vtb.channel_title, thumbnail_msg(vtb.thumbnail_url), []]
+            for video in videos:
+                vtb_videos[-1].append([video['title'], video['thumbnails']])
+            output.append(vtb_videos)
+    print(f"check {'today' if today else 'yesterday'}'s video")
+    output = []
+    tasks = [new_video(vtb) for vtb in database.info()]
+    _, _ = await asyncio.wait(tasks)
+    print("creating images")
+    files = await uploaded_video_img(output)
+    for file in files:
+        await session.send(f'[CQ:image,file=file:///{file}]')
+    #for vtb_videos in output:
+        #out = vtb_videos[0] + '\n'
+        #for video in vtb_videos[-1]:
+            #out += video[0] + '\n'
+        #await session.send(out)
 
 @nonebot.scheduler.scheduled_job('interval', hours=1)
 async def _():
@@ -45,7 +78,7 @@ async def _():
             if video_status:
                 output.append(video_status)
             video_status = ""
-        print("checking " + vtb.channel_title + "'s video")
+        #print("checking " + vtb.channel_title + "'s video")
         res = await youtube.newest_video(vtb.video_list_id, vtb.latest_time)
         if len(res[0]) > 0:
             vtb.latest_time = res[1]
@@ -85,9 +118,7 @@ async def _():
     except CQHttpError:
         print("GROUP MSG ERROR")
 
-
-
-@nonebot.scheduler.scheduled_job('interval', minutes=10)
+@nonebot.scheduler.scheduled_job('interval', minutes=5)
 async def _():
     # check ongoing live automatically
     print("auto live check")
@@ -130,7 +161,7 @@ async def get_stream_status(mannual: bool) -> str:
         
     async def check(vtb):
         nonlocal feedback
-        print("checking " + vtb.channel_title + "'s live")
+        #print("checking " + vtb.channel_title + "'s live")
         #print(vtb.vtb_id)
         if not mannual: # auto check
             if vtb.vtb_id in schedule_checker and schedule_checker[vtb.vtb_id][0] and schedule_checker[vtb.vtb_id][2] < LAZY_CHECK: # Lazy check ongoing streaming
