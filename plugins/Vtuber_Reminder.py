@@ -5,7 +5,7 @@ from nonebot.permission import SUPERUSER, GROUP, EVERYBODY, PRIVATE_GROUP
 from aiocqhttp.exceptions import Error as CQHttpError
 from utilities.youtube import YouTube, youtube
 from utilities.channel import database, Vtuber
-from utilities.image_create import uploaded_video_img
+from utilities.image_create import uploaded_video_img, sub_rank_img
 import httplib2
 
 schedule_checker = dict()
@@ -36,17 +36,17 @@ async def stream(session: CommandSession):
     #print(stream_status)
     await session.send(stream_status)
 
-@on_command('today', aliases=['今天'], permission=SUPERUSER)
+@on_command('today', aliases=['今天'], permission=PRIVATE_GROUP | SUPERUSER)
 async def videos_of_today(session: CommandSession):
     await videos(session)
 
-@on_command('yesterday', aliases=['昨天'], permission=PRIVATE_GROUP)
+@on_command('yesterday', aliases=['昨天'], permission=PRIVATE_GROUP | SUPERUSER)
 async def videos_of_yesterday(session: CommandSession):
     await videos(session, today=False)
 
 async def videos(session: CommandSession, today=True):
     async def new_video(vtb):
-        videos = await youtube.videos_of_day(vtb.video_list_id)
+        videos = await youtube.videos_of_day(vtb.video_list_id, today=today)
         if videos:
             print(f"{vtb.channel_title} has new video")
             nonlocal output
@@ -58,7 +58,7 @@ async def videos(session: CommandSession, today=True):
     output = []
     tasks = [new_video(vtb) for vtb in database.info()]
     _, _ = await asyncio.wait(tasks)
-    print("creating images")
+    print("creating images of uploaded summary")
     files = await uploaded_video_img(output)
     for file in files:
         await session.send(f'[CQ:image,file=file:///{file}]')
@@ -67,6 +67,22 @@ async def videos(session: CommandSession, today=True):
         #for video in vtb_videos[-1]:
             #out += video[0] + '\n'
         #await session.send(out)
+
+@on_command('subrank', permission=GROUP | PRIVATE_GROUP, only_to_me=False)
+async def subrank(session: CommandSession):
+    async def check_sub(vtb):
+         subCount = await youtube.subCount(vtb.vtb_id)
+         nonlocal output
+         print(f'{vtb.channel_title} {subCount}')
+         output.append([vtb, subCount])
+    output = []
+    tasks = [check_sub(vtb) for vtb in database.info()]
+    _, _ = await asyncio.wait(tasks)
+    output.sort(key=lambda vtb: vtb[1], reverse=True)
+    print("creating images of subscription ranking...")
+    files = await sub_rank_img(output)
+    for file in files:
+        await session.send(f'[CQ:image,file=file:///{file}]')
 
 @nonebot.scheduler.scheduled_job('interval', hours=1)
 async def _():

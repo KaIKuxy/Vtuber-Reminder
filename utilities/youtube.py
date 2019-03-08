@@ -27,10 +27,15 @@ class YouTube(object):
     async def stream_check(self, ch_id: str, channel_title: str):
         url = f'https://www.youtube.com/channel/{ch_id}/live'
         # h = httplib2.Http(proxy_info = httplib2.ProxyInfo(httplib2.socks.PROXY_TYPE_SOCKS5, self.address, self.port))
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, proxy='http://localhost:1080') as resp:
-                c = await resp.text()
-                #print("get")
+        while True:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, proxy='http://localhost:1080') as resp:
+                        c = await resp.text()
+                        #print("get")
+                break
+            except:
+                pass
         '''while True:
             try:
                 r, c = h.request(url)
@@ -207,10 +212,30 @@ class YouTube(object):
             if (datetime.utcnow()+timedelta(hours=9)-timedelta(days=not today)).date() == (Time + timedelta(hours=9)).date():
                 video_list.append(video['snippet'])
         return video_list
+    
+    async def channel_statistics(self, ch_id: str):
+        # 'viewCount', 'commentCount', 'subscriberCount', 'hiddenSubscriberCount', 'videoCount'
+        while True:
+            try:
+                search_response = self.youtube.channels().list(
+                        part='statistics',
+                        id=ch_id
+                    ).execute()
+                break
+            except:
+                pass
+        res = search_response.get('items', [])
+        assert len(res) == 1
+        return res[0]['statistics']
+    
+    async def subCount(self, ch_id: str):
+        res = await self.channel_statistics(ch_id)
+        assert res['hiddenSubscriberCount'] == False
+        return int(res['subscriberCount'])
 
 # Set DEVELOPER_KEY to the API key value from the APIs & auth > Registered apps
 # tab of
 #   https://cloud.google.com/console
 # Please ensure that you have enabled the YouTube Data API for your project.
 
-youtube = YouTube('', address='localhost', port=1080)
+youtube = YouTube('', address='127.0.0.1', port=1080)
