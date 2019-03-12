@@ -121,9 +121,9 @@ async def sub_rank_img(rank_list):
         if id <= 20:
             while True:
                 try:
-                    print(vtb[0].thumbnail_url['default']['url'])
+                    #print(vtb[0].thumbnail_url['default']['url'])
                     _, content = http.request(vtb[0].thumbnail_url['default']['url'])
-                    print("ok!")
+                    #print("ok!")
                     break
                 except:
                     pass

@@ -171,8 +171,6 @@ async def get_stream_status(mannual: bool) -> str:
     feedback = str()
 
     async def msg(channel_title, stream_name, thumbnail_url, ch_id, state = mannual):
-        #file_path = await youtube.pic_download(url, ch_id)
-        #return f'{channel_title} {word[mannual]}: {stream_name}\n[CQ:image,file=file:///{file_path}]\n'
         return f'{channel_title} {word[state]}: {stream_name}\n{thumbnail_msg(thumbnail_url)}\n'
         
     async def check(vtb):
@@ -323,10 +321,8 @@ async def _(session: CommandSession):
     text = r"""
     使用YTB的频道添加Vtuber频道
     addchid [频道id]
-
     康康现在有谁在播
     stream/直播
-
     康康怎么用♂我
     help/帮助/救救我啊
     """
